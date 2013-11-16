@@ -495,10 +495,11 @@ class TestNereidProject(NereidTestCase):
             self.assertEqual(len(self.Project.search([])), 2)
 
             self.Project.write(
-                [project1],
-                {
+                [project1], {
                     'participants': [
-                        ('add', [data['registered_user3'].id])
+                        ('create', [{
+                            'user': data['registered_user3'].id
+                        }])
                     ]
                 }
             )
@@ -603,20 +604,17 @@ class TestNereidProject(NereidTestCase):
                 'work': work.id,
                 'type': 'project',
                 'state': 'opened',
+                'participants': [
+                    ('create', [{
+                        'user': data['registered_user2'].id
+                    }])
+                ]
             }])
-
-            # For project nereid user should be participant of that project
-            self.Project.write(
-                [project],
-                {
-                    'participants': [('add', [data['registered_user2'].id])]
-                }
-            )
 
             with app.test_client() as c:
 
                 # User Login
-                response = c.post('/en_US/login', data={
+                c.post('/en_US/login', data={
                     'email': 'example@example.com',
                     'password': 'password',
                 })
@@ -663,9 +661,12 @@ class TestNereidProject(NereidTestCase):
 
             # For project nereid user should be participant of that project
             self.Project.write(
-                [project],
-                {
-                    'participants': [('add', [data['registered_user2'].id])]
+                [project], {
+                    'participants': [
+                        ('create', [{
+                            'user': data['registered_user2'].id
+                        }])
+                    ]
                 }
             )
 
@@ -1321,14 +1322,22 @@ class TestNereidProject(NereidTestCase):
                 'type': 'project',
                 'parent': False,
                 'state': 'opened',
-                'participants': [('set', [data['registered_user1'].id])]
+                'participants': [
+                    ('create', [{
+                        'user': data['registered_user1'].id
+                    }])
+                ]
             }])
             project2, = self.Project.create([{
                 'work': work2.id,
                 'type': 'project',
                 'parent': False,
                 'state': 'opened',
-                'participants': [('set', [data['registered_user2'].id])]
+                'participants': [
+                    ('create', [{
+                        'user': data['registered_user2'].id
+                    }])
+                ]
             }])
             project_model, = self.Model.search([
                 ('model', '=', 'project.work')
@@ -1425,7 +1434,11 @@ class TestNereidProject(NereidTestCase):
                 'type': 'project',
                 'parent': False,
                 'state': 'opened',
-                'participants': [('set', [data['registered_user1'].id])]
+                'participants': [
+                    ('create', [{
+                        'user': data['registered_user1'].id
+                    }])
+                ]
             }])
             project_model, = self.Model.search([
                 ('model', '=', 'project.work')

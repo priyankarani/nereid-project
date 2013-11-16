@@ -40,7 +40,7 @@ from trytond.tools import get_smtp_server
 from trytond.backend import TableHandler
 
 __all__ = [
-    'WebSite', 'ProjectUsers', 'ProjectInvitation',
+    'WebSite', 'ProjectUsers', 'ProjectWorkUser', 'ProjectInvitation',
     'TimesheetEmployeeDay', 'ProjectWorkInvitation', 'Project', 'Tag',
     'TaskTags', 'ProjectHistory', 'ProjectWorkCommit', 'TimesheetLine',
     'Activity', 'Attachment',
@@ -117,6 +117,56 @@ class ProjectUsers(ModelSQL):
             table.table_rename(
                 cursor, 'project_work_nereid_user_rel',
                 'project_work-nereid_user'
+            )
+
+
+class ProjectWorkUser(ModelSQL, ModelView):
+    "Project Work User"
+    __name__ = 'project.work.user'
+
+    user = fields.Many2One(
+        "nereid.user", "Nereid User", required=True, select=True
+    )
+    role = fields.Selection([
+        ('admin', 'Admin'),
+        ('member', 'Member'),
+    ], "Role", required=True)
+    project = fields.Many2One("project.work", "Project", required=True)
+
+    @classmethod
+    def __setup__(cls):
+        super(ProjectWorkUser, cls).__setup__()
+        cls._sql_constraints += [(
+            'check_user',
+            'UNIQUE(project, "user")',
+            'Users must be unique per project'
+        )]
+
+    @staticmethod
+    def default_role():
+        """
+        Sets default role
+        """
+        return 'member'
+
+    @classmethod
+    def __register__(cls, module_name):
+        '''
+        Register class and migrate data from old table to new table
+        '''
+        cursor = Transaction().cursor
+        table_exist = TableHandler.table_exist(cursor, 'project_work_user')
+
+        super(ProjectWorkUser, cls).__register__(module_name)
+
+        if not table_exist:
+            ProjectUsers = Pool().get('project.work-nereid.user')
+
+            # Migrate data from old table to new table
+            cursor.execute(
+                "INSERT INTO %s (project, \"user\", role) "
+                "SELECT old.project, old.user, 'member' from \"%s\" old"
+                % (cls._table, ProjectUsers._table)
             )
 
 
@@ -283,9 +333,9 @@ class Project:
         'project.work.history', 'project',
         'History', readonly=True
     )
-    participants = fields.Many2Many(
-        'project.work-nereid.user', 'project', 'user',
-        'Participants'
+
+    participants = fields.One2Many(
+        'project.work.user', 'project', 'Participants'
     )
 
     tags_for_projects = fields.One2Many(
@@ -309,8 +359,8 @@ class Project:
     created_by = fields.Many2One('nereid.user', 'Created by')
 
     all_participants = fields.Function(
-        fields.Many2Many(
-            'project.work-nereid.user', 'project', 'user',
+        fields.One2Many(
+            'nereid.user', None,
             'All Participants', depends=['company']
         ), 'get_all_participants'
     )
@@ -357,6 +407,8 @@ class Project:
         """
         Put recent projects into the home
         """
+        ProjectUser = Pool().get('project.work.user')
+
         if request.nereid_user.is_project_admin():
             # Display all projects to project admin
             projects = cls.search([
@@ -364,8 +416,11 @@ class Project:
                 ('parent', '=', False),
             ])
         else:
+            project_user, = ProjectUser.search([
+                ('user', '=', request.nereid_user.id)
+            ])
             projects = cls.search([
-                ('participants', '=', request.nereid_user.id),
+                ('participants', '=', project_user),
                 ('type', '=', 'project'),
                 ('parent', '=', False),
             ])
@@ -487,9 +542,12 @@ class Project:
         for values in vlist:
             if has_request_context():
                 values['created_by'] = request.nereid_user.id
+
                 if values['type'] == 'task':
                     values.setdefault('participants', []).append(
-                        ('add', [request.nereid_user.id])
+                        ('create', [{
+                            'user': request.nereid_user.id
+                        }])
                     )
             else:
                 # TODO: identify the nereid user through employee
@@ -504,7 +562,9 @@ class Project:
         """
         if user.is_project_admin():
             return True
-        if not user in self.participants:
+        if not user in map(
+            lambda project_user: project_user.user, self.participants
+        ):
             raise abort(404)
         return True
 
@@ -516,7 +576,9 @@ class Project:
         """
         if user.is_project_admin():
             return True
-        if not user in self.participants:
+        if not user in map(
+            lambda project_user: project_user.user, self.participants
+        ):
             raise abort(404)
         return True
 
@@ -694,9 +756,7 @@ class Project:
                 assignee = NereidUser(request.form.get('assign_to', type=int))
                 self.write([task], {
                     'assigned_to': assignee.id,
-                    'participants': [
-                        ('add', [assignee.id])
-                    ]
+                    'participants': [('create', {'user': assignee.id})]
                 })
                 email_receivers = [assignee.email]
             task.send_mail(email_receivers)
@@ -1967,11 +2027,10 @@ class Project:
 
         if task.assigned_to == new_assignee:
             flash("Task already assigned to %s" % new_assignee.display_name)
-            return redirect(request.referrer)
         if task.parent.can_write(new_assignee):
             cls.write([task], {
                 'assigned_to': new_assignee.id,
-                'participants': [('add', [new_assignee.id])]
+                'participants': [('create', [{'user': new_assignee.id}])]
             })
             task.history[-1].send_mail()
             Activity.create([{
@@ -2059,7 +2118,7 @@ class Project:
         """
         # Check if user is among the project admins
         if not request.nereid_user.is_project_admin():
-            flash("Sorry! You are not allowed to delete tags. \
+            flash("Sorry! You are not allowed to delete task. \
                 Contact your project admin for the same.")
             return redirect(request.referrer)
 
@@ -2410,8 +2469,8 @@ class ProjectHistory(ModelSQL, ModelView):
         )
 
         receivers = map(
-            lambda user: user.email,
-            filter(lambda s: s.email, self.project.participants)
+            lambda project_user: project_user.user.email,
+            filter(lambda s: s.user.email, self.project.participants)
         )
         if self.updated_by.email in receivers:
             receivers.remove(self.updated_by.email)
@@ -2712,9 +2771,14 @@ class Activity:
         Returns the domain to get activity stream of project where current user
         is participant
         '''
+        ProjectUser = Pool().get('project.work.user')
+
+        project_user, = ProjectUser.search([
+            ('user', '=', request.nereid_user.id)
+        ])
         return [
             'OR', [
-                ('project.participants', '=', request.nereid_user.id),
+                ('project.participants', '=', project_user),
             ], [
                 ('actor', '=', request.nereid_user.id)
             ]

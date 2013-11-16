@@ -254,13 +254,14 @@ class TestTask(NereidTestCase):
         }])
 
         self.Project.write(
-            [data['task1'].parent],
-            {
+            [data['task1'].parent], {
                 'participants': [
-                    ('add', [
-                        data['registered_user2'].id,
-                        data['registered_user1'].id
-                    ])
+                    ('create', [{
+                        'user': data['registered_user2'].id,
+                    }]),
+                    ('create', [{
+                        'user': data['registered_user1'].id
+                    }])
                 ]
             }
         )
@@ -388,7 +389,8 @@ class TestTask(NereidTestCase):
 
                     self.assertTrue(json.loads(response.data)['success'])
                     self.assertFalse(
-                        data['registered_user1'] in task.participants
+                        data['registered_user1'] in
+                            map(lambda p: p.user, task.participants)
                     )
 
                     # Watching task
@@ -401,7 +403,8 @@ class TestTask(NereidTestCase):
 
                     self.assertTrue(json.loads(response.data)['success'])
                     self.assertTrue(
-                        data['registered_user1'] in task.participants
+                        data['registered_user1'] in
+                            map(lambda p: p.user, task.participants)
                     )
 
     def test_0040_update_task(self):
@@ -494,6 +497,7 @@ class TestTask(NereidTestCase):
                 'email': 'email@example.com',
                 'password': 'password',
             }
+
             with app.test_client() as c:
                 response = c.post('/en_US/login', data=login_data)
 

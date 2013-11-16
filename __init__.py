@@ -9,7 +9,7 @@
 from trytond.pool import Pool
 
 from project import (
-    WebSite, ProjectUsers, ProjectInvitation,
+    WebSite, ProjectWorkUser, ProjectUsers, ProjectInvitation,
     TimesheetEmployeeDay, ProjectWorkInvitation, Project, Tag,
     TaskTags, ProjectHistory, ProjectWorkCommit, TimesheetLine, Activity,
     Attachment,
@@ -23,6 +23,7 @@ def register():
     Pool.register(
         WebSite,
         ProjectUsers,
+        ProjectWorkUser,
         ProjectInvitation,
         TimesheetEmployeeDay,
         ProjectWorkInvitation,

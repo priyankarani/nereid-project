@@ -95,6 +95,37 @@ of this repository contains the full copyright notices and license terms. -->
           <field name="value">project.manager</field>
         </record>
 
+        <record model="ir.ui.view" id="project_work_user_form">
+            <field name="model">project.work.user</field>
+            <field name="type">form</field>
+            <field name="arch" type="xml">
+                <![CDATA[
+                <form string="Project Users">
+                    <label name="user"/>
+                    <field name="user"/>
+                    <label name="role"/>
+                    <field name="role"/>
+                    <label name="project"/>
+                    <field name="project"/>
+                </form>
+                ]]>
+            </field>
+        </record>
+
+        <record model="ir.ui.view" id="project_work_user_tree">
+            <field name="model">project.work.user</field>
+            <field name="type">tree</field>
+            <field name="arch" type="xml">
+                <![CDATA[
+                <tree string="Project Users">
+                    <field name="user"/>
+                    <field name="role"/>
+                </tree>
+                ]]>
+            </field>
+        </record>
+
+
     </data>
 </tryton>
 
